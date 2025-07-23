@@ -1,8 +1,24 @@
 import express from 'express'
 import dotenv from 'dotenv';
 import cors from 'cors'
+import { sequelizeCon } from './src/init/dbConnection.js'; 
+
+// file imports
+import printdTicekts from './src/routes/printedTickets.rotuer.js'
+import admins from './src/routes/admins.router.js'
+import winningPercentage from './src/routes/winningPercentage.routes.js'
+import winnings from './src/routes/getWinningNumbers.router.js'
 
 dotenv.config;
+
+
+sequelizeCon.sync({force : false})
+.then(()=>{
+    console.log('Database synced successfully');
+})
+.catch((err)=> {
+    console.error("Error syncing database", err);
+});
 
 const app = express();
 const port = process.env.PORT || 3085;
@@ -28,6 +44,11 @@ app.get('/', (req, res) => {
     });
 });
 
+
+app.use("/api", printdTicekts);
+app.use("/api", admins);
+app.use("/api", winningPercentage);
+app.use("/api", winnings);
 
 // Start the server
 app.listen(port, ()=> {
