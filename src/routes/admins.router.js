@@ -1,4 +1,4 @@
-import { adminLogin, createAdmin, deleteAdminByUserName, getAdminUsernamesAndCommissions, getAllAdmins, updateAdminCommission } from '../controller/admins.controller.js';
+import { adminLogin, createAdmin, deleteAdminByUserName, getAdminUsernamesAndCommissions, getAllAdmins, mainAdminLogin, updateAdminCommission } from '../controller/admins.controller.js';
 import express from 'express'
 
 const router = express.Router();
@@ -9,5 +9,6 @@ router.post("/login-admin", adminLogin);
 router.post("/update-commission", updateAdminCommission);
 router.get("/get-commission-details", getAdminUsernamesAndCommissions);
 router.post("/delete-commission", deleteAdminByUserName);
+router.post("/main-admin-login", mainAdminLogin);
 
 export default router;

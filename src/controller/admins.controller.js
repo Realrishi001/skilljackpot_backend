@@ -175,3 +175,52 @@ export const deleteAdminByUserName = async (req, res) => {
     res.status(500).json({ message: "Server error.", error: error.message });
   }
 };
+
+
+export const mainAdminLogin = async (req, res) => {
+  try {
+    const { adminId, password } = req.body;
+
+    console.log(adminId, password);
+    // Check required fields
+    if (!adminId || !password) {
+      return res.status(400).json({ message: "Admin ID and password are required." });
+    }
+
+    // Get hashes from env
+    const adminIdHash = process.env.ADMIN_ID;
+    const adminPasswordHash = process.env.ADMIN_PASSWORD;
+    const jwtSecret = process.env.JWT_SECRET; // fallback
+
+    // Compare admin ID
+    const isIdMatch = await bcrypt.compare(adminId, adminIdHash);
+    if (!isIdMatch) {
+      return res.status(401).json({ message: "Invalid credentials." });
+    }
+
+    // Compare password
+    const isPassMatch = await bcrypt.compare(password, adminPasswordHash);
+    if (!isPassMatch) {
+      return res.status(401).json({ message: "Invalid credentials." });
+    }
+
+    // Issue JWT
+    const payload = {
+      role: "main_admin",
+      adminId: adminId,
+      userName: process.env.MAIN_ADMIN_USERNAME || "main_admin"
+    };
+    const token = jwt.sign(payload, jwtSecret, { expiresIn: "1d" });
+
+    res.status(200).json({
+      success: true,                    
+      message: "Main Admin Login Successful!",
+      token
+    });
+
+
+  } catch (error) {
+    console.error("Main admin login error:", error);
+    res.status(500).json({ message: "Server error.", error: error.message });
+  }
+};

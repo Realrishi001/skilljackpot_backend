@@ -29,7 +29,7 @@ const tickets = sequelizeCon.define(
             allowNull : false
         },
         drawTime : {
-            type : DataTypes.STRING,
+            type : DataTypes.JSON,
             allowNull : false,
         }
     },{

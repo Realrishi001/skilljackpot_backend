@@ -4,6 +4,10 @@ const savePrintedTickets = async (req, res) => {
     try {
         const { gameTime, ticketNumber, totalQuatity, totalPoints, loginId, drawTime } = req.body;
 
+        if (!Array.isArray(drawTime) || drawTime.length === 0) {
+            return res.status(400).json({ message: "drawTime must be a non-empty array." });
+            }
+
         const newTicket = await tickets.create({
             gameTime,
             loginId,
