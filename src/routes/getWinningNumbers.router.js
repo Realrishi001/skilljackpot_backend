@@ -1,8 +1,8 @@
 import express from 'express'
-import { getThirtyTicketNumbers } from '../controller/getWinningNumbers.controller.js';
+import { getTicketsByDrawTime } from '../controller/getWinningNumbers.controller.js';
 
 const router = express.Router();
 
-router.get("/thirty-tickets", getThirtyTicketNumbers);
+router.post("/get-winning-numbers", getTicketsByDrawTime);
 
 export default router;
