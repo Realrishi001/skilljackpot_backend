@@ -228,3 +228,26 @@ export const getTicketsByDrawTime = async (req, res) => {
     return res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
+
+
+export const getWinningNumbersByLoginId = async (req, res) => {
+  try {
+    const { loginId } = req.body;
+    if (!loginId) {
+      return res.status(400).json({ message: "loginId is required" });
+    }
+
+    // Find all winning numbers for this loginId
+    const records = await winningNumbers.findAll({
+      where: { loginId },
+      attributes: ["winningNumbers", "DrawTime", "drawDate"],
+      order: [["drawDate", "DESC"], ["createdAt", "DESC"]], // latest first
+    });
+
+    return res.status(200).json({ count: records.length, results: records });
+  } catch (err) {
+    console.error("Error fetching winning numbers:", err);
+    return res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
