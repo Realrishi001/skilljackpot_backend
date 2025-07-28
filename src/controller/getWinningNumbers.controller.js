@@ -44,7 +44,7 @@ export const getTicketsByDrawTime = async (req, res) => {
     if (!drawTime || !adminId) {
       return res.status(400).json({ message: "drawTime and adminId are required" });
     }
-    const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const currentDate = new Date().toISOString().split('T')[0];
     const queryTime = drawTime.trim().toLowerCase();
 
     const existingResult = await winningNumbers.findOne({
