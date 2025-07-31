@@ -12,6 +12,7 @@ import dashboard from './src/routes/admindashboard.router.js'
 import drawRouter from './src/routes/drawloadpoint.router.js'
 import summaryRouter from './src/routes/summary.router.js'
 import navbarRouter from './src/routes/navbar.router.js'
+import winnerMasterRouter from './src/routes/winnermaster.router.js'
 
 dotenv.config;
 
@@ -57,6 +58,7 @@ app.use('/api', dashboard);
 app.use("/api", drawRouter);
 app.use("/api", summaryRouter);
 app.use('/api', navbarRouter);
+app.use("/api", winnerMasterRouter);
 
 // Start the server
 app.listen(port, ()=> {

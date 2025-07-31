@@ -105,3 +105,64 @@ export const getTicketSummary = async (req, res) => {
     });
   }
 };
+
+
+export const getTicketsBySeries = async (req, res) => {
+  try {
+    const allTickets = await tickets.findAll({
+      attributes: ["ticketNumber", "loginId", "createdAt"],
+      order: [["createdAt", "DESC"]],
+    });
+
+    const result = allTickets.map(ticket => {
+      let series10 = [];
+      let series30 = [];
+      let series50 = [];
+
+      // Ticket number can be JSON or string
+      let ticketNumberObj = ticket.ticketNumber;
+
+      // If it's a string in "30-00 : 3, 50-00 : 4" format, convert to object
+      if (typeof ticketNumberObj === "string") {
+        ticketNumberObj = ticketNumberObj.split(",").reduce((acc, entry) => {
+          const [key, value] = entry.split(":").map(str => str.trim());
+          if (key && value) acc[key] = Number(value);
+          return acc;
+        }, {});
+      }
+
+      // Now ticketNumberObj is an object like { "30-00": 3, ... }
+      for (const [ticketNum, qty] of Object.entries(ticketNumberObj)) {
+        const base = parseInt(ticketNum.split("-")[0], 10);
+        const obj = { ticketNumber: ticketNum, quantity: qty };
+        if (base >= 10 && base <= 19) {
+          series10.push(obj);
+        } else if (base >= 30 && base <= 39) {
+          series30.push(obj);
+        } else if (base >= 50 && base <= 59) {
+          series50.push(obj);
+        }
+      }
+
+      return {
+        shopId: ticket.loginId,
+        createdAt: ticket.createdAt,
+        series10,
+        series30,
+        series50,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      tickets: result,
+    });
+  } catch (error) {
+    console.error("Error fetching tickets by series:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch tickets by series",
+      error: error.message,
+    });
+  }
+};
