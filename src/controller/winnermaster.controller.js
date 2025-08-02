@@ -3,23 +3,22 @@ import { winningNumbers } from "../models/winningNumbers.model.js";
 import Admin from "../models/admins.model.js";
 
 // Helper to get all two-digit combos as string
-const getAllTwoDigit = () => Array.from({length: 100}, (_,i)=>i.toString().padStart(2,"0"));
+const getAllTwoDigit = () => Array.from({ length: 100 }, (_, i) => i.toString().padStart(2, "0"));
 
-// Generate a unique number not in usedNumbers for a given prefix
-function getUniqueNumber(prefix, usedNumbers) {
-  for (const last2 of getAllTwoDigit()) {
-    const num = prefix + last2;
-    if (!usedNumbers.has(num)) return num;
-  }
-  // fallback: return null if all are used
-  return null;
+// Helper: get a random available number for a prefix
+function getRandomUniqueNumber(prefix, usedNumbers) {
+  // Build an array of all 100 possible numbers for this prefix
+  const possible = getAllTwoDigit().map(last2 => prefix + last2).filter(num => !usedNumbers.has(num));
+  if (possible.length === 0) return null; // all used!
+  const idx = Math.floor(Math.random() * possible.length);
+  return possible[idx];
 }
 
 export const getTodaysTicketNumbers = async (req, res) => {
   try {
     const today = new Date().toISOString().split("T")[0];
 
-    // Collect all today's ticket numbers (in 4-digit format)
+    // Fetch all today's ticket numbers
     const allTickets = await tickets.findAll({
       attributes: ["ticketNumber", "createdAt"],
       order: [["createdAt", "DESC"]],
@@ -27,34 +26,56 @@ export const getTodaysTicketNumbers = async (req, res) => {
 
     let usedNumbers = new Set();
 
+    // Only process tickets from today
     allTickets.forEach(ticket => {
-      if (new Date(ticket.createdAt).toISOString().split("T")[0] !== today) return;
+      const ticketDate = new Date(ticket.createdAt).toISOString().split("T")[0];
+      if (ticketDate !== today) return;
+      
+      // ticketNumber is JSON in your model, but can be array or object or stringified
+      let numbersArr = [];
+      if (Array.isArray(ticket.ticketNumber)) {
+        numbersArr = ticket.ticketNumber;
+      } else if (typeof ticket.ticketNumber === "object") {
+        // If object, get its keys (or values as needed)
+        numbersArr = Object.keys(ticket.ticketNumber);
+      } else if (typeof ticket.ticketNumber === "string") {
+        try {
+          // Try parsing JSON string
+          const parsed = JSON.parse(ticket.ticketNumber);
+          if (Array.isArray(parsed)) numbersArr = parsed;
+          else if (typeof parsed === "object") numbersArr = Object.keys(parsed);
+        } catch {
+          // If not JSON, maybe it's comma-separated
+          numbersArr = ticket.ticketNumber.split(",").map(n => n.trim().split(":")[0]);
+        }
+      }
 
-      let ticketStr = ticket.ticketNumber;
-      if (typeof ticketStr !== "string") ticketStr = JSON.stringify(ticketStr);
-      ticketStr = ticketStr.replace(/^"+|"+$/g, "");
-
-      const pairs = ticketStr.split(",").map(pair => pair.trim());
-      pairs.forEach(pair => {
-        const [numPart] = pair.split(":").map(v => v.trim());
-        if (numPart) usedNumbers.add(numPart.replace("-", ""));
+      numbersArr.forEach(num => {
+        if (typeof num === "string") {
+          // Remove any non-digit chars, like hyphens or spaces
+          usedNumbers.add(num.replace(/\D/g, ''));
+        }
       });
     });
 
-    // Helper for series (takes prefix as string, e.g. "10", "30", "50")
+    // Generate random unused number for each prefix in the series
     const generateSeries = (start) => {
       const series = [];
       for (let prefix = start; prefix < start + 10; prefix++) {
-        const uniqueNum = getUniqueNumber(String(prefix), usedNumbers);
-        if (uniqueNum) {
-          series.push(uniqueNum);
-          usedNumbers.add(uniqueNum);
+        let num;
+        let attempts = 0;
+        do {
+          num = getRandomUniqueNumber(String(prefix), usedNumbers);
+          attempts++;
+        } while (num && usedNumbers.has(num) && attempts < 200); // avoid infinite loop
+        if (num) {
+          series.push(num);
+          usedNumbers.add(num); // to avoid repeating in this response
         }
       }
       return series;
     };
 
-    // Generate for all three series
     const series10 = generateSeries(10); // 10-19
     const series30 = generateSeries(30); // 30-39
     const series50 = generateSeries(50); // 50-59
@@ -71,16 +92,16 @@ export const getTodaysTicketNumbers = async (req, res) => {
         series50: series50.length,
       }
     });
+
   } catch (error) {
-    console.error("Error generating unique numbers:", error);
+    console.error("Error generating series numbers:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to generate numbers",
+      message: "Failed to generate series numbers",
       error: error.message,
     });
   }
 };
-
 
 export const saveWinningNumbers = async (req, res) => {
   try {

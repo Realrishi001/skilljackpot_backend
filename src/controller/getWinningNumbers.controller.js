@@ -3,39 +3,17 @@ import Admin from "../models/admins.model.js";
 import { winningPercentage } from "../models/winningPercentage.model.js";
 import { winningNumbers } from "../models/winningNumbers.model.js";
 
-// Helper: get prefix list for a series (e.g. "10" => ["10",...,"19"])
+// Helpers
 function getPrefixList(seriesPrefix) {
   const start = parseInt(seriesPrefix);
   return Array.from({ length: 10 }, (_, i) => String(start + i));
 }
-// Helper: get random 2 digits as string
 function getRandomTwoDigits() {
   return String(Math.floor(Math.random() * 100)).padStart(2, '0');
 }
-// Helper: get the series from a ticket number
 function getSeries(numStr) {
   if (numStr.length < 4) return null;
   return numStr.slice(0, 2);
-}
-// Helper: For each prefix, pick ticket or fill random
-function makeSeriesWinners(prefix, allTicketEntries) {
-  const prefixList = getPrefixList(prefix);
-  const result = [];
-  for (const pfx of prefixList) {
-    const candidates = allTicketEntries.filter(entry => entry.number.startsWith(pfx));
-    if (candidates.length > 0) {
-      // Pick highest value (or just the first one)
-      // You can also use sort to pick highest value
-      // candidates.sort((a, b) => b.value - a.value);
-      result.push(candidates[0]);
-    } else {
-      result.push({
-        number: pfx + getRandomTwoDigits(),
-        value: 0
-      });
-    }
-  }
-  return result;
 }
 
 export const getTicketsByDrawTime = async (req, res) => {
@@ -47,14 +25,14 @@ export const getTicketsByDrawTime = async (req, res) => {
     const currentDate = new Date().toISOString().split('T')[0];
     const queryTime = drawTime.trim().toLowerCase();
 
+    // Check if results already exist
     const existingResult = await winningNumbers.findOne({
-  where: {
-    DrawTime: drawTime,
-    drawDate: currentDate,
-    loginId: adminId
-  } 
-});
-
+      where: {
+        DrawTime: drawTime,
+        drawDate: currentDate,
+        loginId: adminId
+      }
+    });
 
     if (existingResult) {
       // Parse winning numbers JSON if stored as string
@@ -85,12 +63,15 @@ export const getTicketsByDrawTime = async (req, res) => {
 
     // --- FETCH ALL TICKETS ---
     const allTickets = await tickets.findAll({
-      attributes: ["ticketNumber", "totalPoints", "drawTime"]
+      where: { /* optionally filter more */ },
+      attributes: ["ticketNumber", "drawTime", "loginId"],
     });
 
-    // --- FILTER TICKETS FOR DRAW TIME ---
+    // --- FILTER TICKETS FOR DRAW TIME & ADMIN ---
     const filtered = allTickets.filter(ticket => {
-      if (!ticket.drawTime) return false;
+      // Match by loginId
+      if (String(ticket.loginId) !== String(adminId)) return false;
+      // Match by drawTime
       let times;
       try {
         times = Array.isArray(ticket.drawTime)
@@ -103,94 +84,81 @@ export const getTicketsByDrawTime = async (req, res) => {
       return times.map(t => String(t).trim().toLowerCase()).includes(queryTime);
     });
 
+    // --- PARSE AND AGGREGATE TICKET QUANTITIES ---
+    // ticketNumber format: "50-2-2 : 5"
+    // We want a map: { "5022": totalQuantity }
+    const ticketQuantityMap = {};
+    filtered.forEach(ticket => {
+      const parts = (ticket.ticketNumber || "").split(",");
+      parts.forEach(part => {
+        let [num, qty] = part.split(":").map(s => s.trim());
+        if (num && qty && !isNaN(qty)) {
+          // Normalize ticket number (remove dashes)
+          const normalizedNum = num.replace(/-/g, "");
+          ticketQuantityMap[normalizedNum] = (ticketQuantityMap[normalizedNum] || 0) + Number(qty);
+        }
+      });
+    });
+
+    // --- GET ADMIN COMMISSION ---
     const admin = await Admin.findByPk(adminId, { attributes: ["commission"] });
     if (!admin) {
       return res.status(404).json({ message: "Admin not found." });
     }
 
-    // --- IF NO TICKETS, RETURN FILLED ZEROES ---
-    if (!filtered.length) {
-      // Fill for 10-19, 30-39, 50-59
-      const fillSeries = (prefix) => getPrefixList(prefix).map(pfx => ({
-        number: pfx + getRandomTwoDigits(),
-        value: 0
-      }));
-      const fill10 = fillSeries("10");
-      const fill30 = fillSeries("30");
-      const fill50 = fillSeries("50");
+    // --- CALCULATE TOTAL QUANTITY & POINTS ---
+    const totalQuantity = Object.values(ticketQuantityMap).reduce((sum, qty) => sum + qty, 0);
+    const totalPoints = totalQuantity * 180;
 
-      await winningNumbers.create({
-        loginId: adminId,
-        winningNumbers: [...fill10, ...fill30, ...fill50],
-        totalPoints: 0,
-        DrawTime: drawTime,
-        drawDate: currentDate
-      });
-
-      return res.status(200).json({
-        drawTime,
-        totalPoints: 0,
-        commission: Number(admin.commission),
-        winningPercentage: 0,
-        updatedTotalPoint: 0,
-        selectedTickets: [...fill10, ...fill30, ...fill50],
-        sumOfSelected: 0,
-        numbersBySeries: {
-          "10": fill10,
-          "30": fill30,
-          "50": fill50,
-        }
-      });
-    }
-
-    // --- MAP ALL TICKETS INTO {number, value} ENTRIES ---
-    const ticketMap = {};
-    filtered.forEach(ticket => {
-      let ticketStr = ticket.ticketNumber;
-      if (typeof ticketStr === "string" && ticketStr.startsWith('"') && ticketStr.endsWith('"')) {
-        ticketStr = ticketStr.slice(1, -1);
-      }
-      const parts = ticketStr.split(",").map(p => p.trim()).filter(Boolean);
-      parts.forEach(part => {
-        const [num, val] = part.split(":").map(s => s.trim());
-        if (num && val && !isNaN(val)) {
-          const numericNum = num.replace(/-/g, "");
-          ticketMap[numericNum] = (ticketMap[numericNum] || 0) + Number(val);
-        }
-      });
-    });
-
-    const allTicketEntries = Object.entries(ticketMap).map(([number, value]) => ({
-      number,
-      value,
-    }));
-
-    // --- SELECT EXACTLY 10 NUMBERS FOR EACH SERIES PREFIX ---
-    const series10 = makeSeriesWinners("10", allTicketEntries);
-    const series30 = makeSeriesWinners("30", allTicketEntries);
-    const series50 = makeSeriesWinners("50", allTicketEntries);
-
-    const selectedTickets = [...series10, ...series30, ...series50];
-    const numbersBySeries = { "10": series10, "30": series30, "50": series50 };
-
-    // --- CALCULATE TOTALS & WINNING ---
-    const totalPoints = filtered.reduce(
-      (sum, ticket) => sum + Number(ticket.totalPoints),
-      0
-    );
+    // --- COMMISSION & WINNING PERCENTAGE ---
     const commissionPercent = Number(admin.commission) || 0;
     const afterCommission = totalPoints - (totalPoints * commissionPercent / 100);
-
-    const latestWinning = await winningPercentage.findOne({
-      order: [['createdAt', 'DESC']]
-    });
+    const latestWinning = await winningPercentage.findOne({ order: [['createdAt', 'DESC']] });
     const winningPercent = latestWinning ? Number(latestWinning.percentage) : 0;
-    const updatedTotalPoint = Math.round(afterCommission * (winningPercent / 100));
+    const updatedTotalPoint = Math.floor(afterCommission * (winningPercent / 100));
+
+    // --- SELECT WINNERS (UP TO PRIZE POOL) ---
+    // Prepare all ticket entries sorted by highest quantity
+    const allTicketEntries = Object.entries(ticketQuantityMap)
+      .map(([number, qty]) => ({ number, qty, value: qty * 180 }))
+      .sort((a, b) => b.value - a.value); // highest value first
+
+    // Prepare winner selection logic
+    let prizeDistributed = 0;
+    const winners = [];
+    const seriesPrefixes = ["10", "30", "50"];
+    const numbersBySeries = { "10": [], "30": [], "50": [] };
+
+    // For each series, go from prefix0 to prefix9
+    for (const prefix of seriesPrefixes) {
+      const prefixList = getPrefixList(prefix);
+      for (const pfx of prefixList) {
+        // Find tickets for this prefix
+        const candidates = allTicketEntries.filter(entry => entry.number.startsWith(pfx));
+        if (candidates.length > 0) {
+          for (const entry of candidates) {
+            if (prizeDistributed + entry.value > updatedTotalPoint) continue; // Don't exceed prize pool
+            winners.push({ number: entry.number, value: entry.value });
+            numbersBySeries[prefix].push({ number: entry.number, value: entry.value });
+            prizeDistributed += entry.value;
+            break; // Only pick one per prefix
+          }
+        } else {
+          // No real ticket for this prefix, fill with random (value=0)
+          const randomNum = pfx + getRandomTwoDigits();
+          winners.push({ number: randomNum, value: 0 });
+          numbersBySeries[prefix].push({ number: randomNum, value: 0 });
+        }
+        // Stop if prize pool limit reached/exceeded
+        if (prizeDistributed >= updatedTotalPoint) break;
+      }
+      if (prizeDistributed >= updatedTotalPoint) break;
+    }
 
     // --- SAVE WINNING NUMBERS ---
     await winningNumbers.create({
       loginId: adminId,
-      winningNumbers: selectedTickets,
+      winningNumbers: winners,
       totalPoints,
       DrawTime: drawTime,
       drawDate: currentDate
@@ -202,15 +170,17 @@ export const getTicketsByDrawTime = async (req, res) => {
       commission: commissionPercent,
       winningPercentage: winningPercent,
       updatedTotalPoint,
-      selectedTickets,
-      sumOfSelected: selectedTickets.reduce((sum, t) => sum + Number(t.value), 0),
+      selectedTickets: winners,
+      sumOfSelected: prizeDistributed,
       numbersBySeries
     });
+
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 
 export const getWinningNumbersByLoginId = async (req, res) => {
