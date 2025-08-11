@@ -16,6 +16,7 @@ import winnerMasterRouter from './src/routes/winnermaster.router.js'
 import claimTicketRouter from './src/routes/claimedTickets.router.js'
 import cancelTicketRouter from './src/routes/cancelTicket.router.js'
 import superadminRouter from './src/routes/superadmin.router.js'
+import winningNumberRouter from './src/routes/winningNumbers.router.js'
 
 dotenv.config;
 
@@ -65,6 +66,7 @@ app.use("/api", winnerMasterRouter);
 app.use("/api", claimTicketRouter);
 app.use("/api", cancelTicketRouter);
 app.use("/api", superadminRouter);
+app.use("/api", winningNumberRouter);
 
 // Start the server
 app.listen(port, ()=> {

@@ -1,5 +1,6 @@
 import { tickets } from "../models/ticket.model.js";
 import Admin from "../models/admins.model.js";
+import { Op } from "sequelize";
 
 export const getTicketSummary = async (req, res) => {
   try {
@@ -109,57 +110,97 @@ export const getTicketSummary = async (req, res) => {
 
 export const getTicketsBySeries = async (req, res) => {
   try {
-    const allTickets = await tickets.findAll({
-      attributes: ["ticketNumber", "loginId", "createdAt"],
+    let { drawDate } = req.body || {};
+
+    if (!drawDate) {
+      return res.status(400).json({ success: false, message: "drawDate is required" });
+    }
+
+    // Normalize date to DD-MM-YYYY
+    const toDDMMYYYY = (d) => {
+      const s = String(d);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const [Y, M, D] = s.split("-");
+        return `${D}-${M}-${Y}`;
+      }
+      return s;
+    };
+    const ddmmyyyy = toDDMMYYYY(drawDate);
+
+    // Fetch all tickets for the date
+    const rows = await tickets.findAll({
+      where: { gameTime: { [Op.like]: `${ddmmyyyy}%` } },
+      attributes: ["ticketNumber", "loginId", "createdAt", "gameTime", "drawTime"],
       order: [["createdAt", "DESC"]],
     });
 
-    const result = allTickets.map(ticket => {
-      let series10 = [];
-      let series30 = [];
-      let series50 = [];
+    const toTimeArray = (val) => {
+      if (Array.isArray(val)) return val;
+      if (typeof val === "string") {
+        try {
+          const parsed = JSON.parse(val);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    };
 
-      // Ticket number can be JSON or string
-      let ticketNumberObj = ticket.ticketNumber;
-
-      // If it's a string in "30-00 : 3, 50-00 : 4" format, convert to object
-      if (typeof ticketNumberObj === "string") {
-        ticketNumberObj = ticketNumberObj.split(",").reduce((acc, entry) => {
-          const [key, value] = entry.split(":").map(str => str.trim());
-          if (key && value) acc[key] = Number(value);
+    const parseTicketNumber = (raw) => {
+      if (!raw) return {};
+      if (typeof raw === "object" && !Array.isArray(raw)) return raw;
+      if (typeof raw === "string") {
+        try {
+          const maybeObj = JSON.parse(raw);
+          if (maybeObj && typeof maybeObj === "object" && !Array.isArray(maybeObj)) return maybeObj;
+        } catch { }
+        return raw.split(",").reduce((acc, entry) => {
+          const [k, v] = entry.split(":").map((s) => s.trim());
+          if (k && v) acc[k] = Number(v);
           return acc;
         }, {});
       }
+      return {};
+    };
 
-      // Now ticketNumberObj is an object like { "30-00": 3, ... }
-      for (const [ticketNum, qty] of Object.entries(ticketNumberObj)) {
-        const base = parseInt(ticketNum.split("-")[0], 10);
-        const obj = { ticketNumber: ticketNum, quantity: qty };
-        if (base >= 10 && base <= 19) {
-          series10.push(obj);
-        } else if (base >= 30 && base <= 39) {
-          series30.push(obj);
-        } else if (base >= 50 && base <= 59) {
-          series50.push(obj);
-        }
+    const result = rows.map((t) => {
+      const tnObj = parseTicketNumber(t.ticketNumber);
+
+      const series10 = [];
+      const series30 = [];
+      const series50 = [];
+
+      for (const [ticketNum, qtyRaw] of Object.entries(tnObj)) {
+        const qty = Number(qtyRaw) || 0;
+        const base = parseInt(String(ticketNum).split("-")[0], 10);
+        const item = { ticketNumber: String(ticketNum).replace("-", ""), quantity: qty };
+
+        if (base >= 10 && base <= 19) series10.push(item);
+        else if (base >= 30 && base <= 39) series30.push(item);
+        else if (base >= 50 && base <= 59) series50.push(item);
       }
 
       return {
-        shopId: ticket.loginId,
-        createdAt: ticket.createdAt,
+        shopId: t.loginId,
+        dateFromGameTime: String(t.gameTime).split(" ")[0],
+        drawTime: toTimeArray(t.drawTime), // ✅ Always send stored drawTime
+        createdAt: t.createdAt,
         series10,
         series30,
         series50,
       };
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
+      count: result.length,
       tickets: result,
     });
+
   } catch (error) {
-    console.error("Error fetching tickets by series:", error);
-    res.status(500).json({
+    console.error("Error fetching tickets by series (date filter only):", error);
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch tickets by series",
       error: error.message,

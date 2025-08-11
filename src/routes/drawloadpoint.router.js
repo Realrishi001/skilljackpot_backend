@@ -4,6 +4,6 @@ import { getTicketsBySeries, getTicketSummary } from '../controller/drawloadpoin
 const router = express.Router();
 
 router.get("/draw-details", getTicketSummary);
-router.get("/table-draw-details", getTicketsBySeries);
+router.post("/table-draw-details", getTicketsBySeries);
 
 export default router;
