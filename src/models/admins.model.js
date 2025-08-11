@@ -56,7 +56,6 @@ const Admin = sequelizeCon.define(
     emailAddress: {
       type: DataTypes.STRING,
       allowNull: true,
-      unique: true,
     },
     password: {
       type: DataTypes.STRING,
