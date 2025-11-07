@@ -64,24 +64,28 @@ const port = process.env.PORT || 3085;
 const allowedOrigins = [
   'https://skill-king.in',
   'https://www.skill-king.in',
-  'https://admin.skill-king.in',
+  'https://admin.skill-king.in'
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (e.g. mobile apps, curl)
+    // Allow Postman / curl / server calls (no Origin)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn(`❌ Blocked CORS request from: ${origin}`);
-      callback(new Error('CORS not allowed for this origin'));
-    }
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    console.warn(`❌  CORS blocked from: ${origin}`);
+    return callback(new Error('CORS not allowed for this origin'), false);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
+  optionsSuccessStatus: 200
 };
+
+app.use(cors(corsOptions));
+
+// Handle OPTIONS preflight automatically
+app.options('*', cors(corsOptions));
+
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -110,7 +114,6 @@ app.use('/api', dashboard);
 app.use('/api', drawRouter);
 app.use('/api', summaryRouter);
 app.use('/api', navbarRouter);
-<<<<<<< HEAD
 app.use("/api", winnerMasterRouter);
 app.use("/api", claimTicketRouter);
 app.use("/api", cancelTicketRouter);
@@ -121,7 +124,6 @@ app.use("/api", threedRouter);
 app.listen(port, ()=> {
     console.log(`Server is running on port ${port}`);
 })
-=======
 app.use('/api', winnerMasterRouter);
 app.use('/api', claimTicketRouter);
 app.use('/api', cancelTicketRouter);
@@ -134,4 +136,3 @@ app.use('/api', winningNumberRouter);
 app.listen(port, () => {
   console.log(`🚀 Server is running on port ${port}`);
 });
->>>>>>> 5196af4 (cors issue solve)
