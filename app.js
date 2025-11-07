@@ -3,25 +3,10 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import { sequelizeCon } from './src/init/dbConnection.js';
 
-<<<<<<< HEAD
-// file imports
-import printdTicekts from './src/routes/printedTickets.rotuer.js'
-import admins from './src/routes/admins.router.js'
-import winningPercentage from './src/routes/winningPercentage.routes.js'
-import winnings from './src/routes/getWinningNumbers.router.js'
-import dashboard from './src/routes/admindashboard.router.js'
-import drawRouter from './src/routes/drawloadpoint.router.js'
-import summaryRouter from './src/routes/summary.router.js'
-import navbarRouter from './src/routes/navbar.router.js'
-import winnerMasterRouter from './src/routes/winnermaster.router.js'
-import claimTicketRouter from './src/routes/claimedTickets.router.js'
-import cancelTicketRouter from './src/routes/cancelTicket.router.js'
-import superadminRouter from './src/routes/superadmin.router.js'
-import winningNumberRouter from './src/routes/winningNumbers.router.js'
-import threedRouter from './src/routes/threed.rotuer.js'
+
 
 dotenv.config();
-=======
+
 // File imports
 import printdTicekts from './src/routes/printedTickets.rotuer.js';
 import admins from './src/routes/admins.router.js';
@@ -50,7 +35,7 @@ sequelizeCon
   .catch((err) => {
     console.error('❌ Error syncing database', err);
   });
->>>>>>> 5196af4 (cors issue solve)
+
 
 // ===========================
 //  Express App Setup
